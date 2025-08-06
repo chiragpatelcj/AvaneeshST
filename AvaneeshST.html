@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Avaneesh Stock Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #181818;
+      --text-color: #e0e0e0;
+      --input-bg: #2a2a2a;
+      --border-color: #444;
+      --card-color: #2a2a2a;
+    }
+
+    body.light {
+      --bg-color: #f4f4f4;
+      --text-color: #222;
+      --input-bg: #ffffff;
+      --border-color: #ccc;
+      --card-color: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 20px;
+      max-width: 700px;
+      margin: auto;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    input, button, select {
+      width: 100%;
+      margin: 5px 0;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background-color: var(--input-bg);
+      color: var(--text-color);
+    }
+
+    button {
+      cursor: pointer;
+      background-color: var(--border-color);
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .theme-toggle {
+      font-size: 14px;
+      padding: 6px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      color: var(--text-color);
+      margin: 10px 0;
+      cursor: pointer;
+    }
+
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+
+    li {
+      background-color: var(--card-color);
+      padding: 15px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .inline-edit {
+      width: 100%;
+      border: 1px dashed var(--border-color);
+      padding: 6px;
+      margin: 5px 0;
+      background-color: transparent;
+      font-weight: bold;
+    }
+
+    #scrollTopBtn {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background-color: var(--border-color);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      animation: bounce 1s infinite ease-in-out;
+      z-index: 999;
+      border: none;
+    }
+
+    #scrollTopBtn svg {
+      width: 28px;
+      height: 28px;
+      fill: var(--text-color);
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    #addModal {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background-color: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    #addModalContent {
+      background-color: var(--card-color);
+      padding: 20px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      width: 90%;
+      max-width: 400px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Avaneesh Stock Tracker</h1>
+
+  <button onclick="openAddModal()">Add Product</button>
+  <button onclick="exportToExcel()">Export to Excel</button>
+
+  <input type="text" id="searchInput" placeholder="Search products..." oninput="renderStock()" />
+
+  <select id="qtyFilter" onchange="renderStock()">
+    <option value="all">All Quantities</option>
+    <option value="available">Qty > 0</option>
+    <option value="outofstock">Qty = 0</option>
+    <option value="new">Newly Added Items</option>
+  </select>
+
+  <select id="sortFilter" onchange="renderStock()">
+    <option value="code-asc">Sort by Code (A → Z)</option>
+    <option value="code-desc">Sort by Code (Z → A)</option>
+    <option value="name-asc">Sort by Name (A → Z)</option>
+    <option value="name-desc">Sort by Name (Z → A)</option>
+    <option value="qty-asc">Sort by Qty (Low → High)</option>
+    <option value="qty-desc">Sort by Qty (High → Low)</option>
+    <option value="price-asc">Sort by Price (Low → High)</option>
+    <option value="price-desc">Sort by Price (High → Low)</option>
+  </select>
+
+  <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+
+  <ul id="stockList"></ul>
+
+  <!-- Scroll to Top Button (SVG) -->
+  <button id="scrollTopBtn" onclick="scrollToTop()" aria-label="Scroll to top">
+    <svg viewBox="0 0 24 24">
+      <path d="M12 4l-8 8h6v8h4v-8h6z"/>
+    </svg>
+  </button>
+
+  <!-- Add Product Modal -->
+  <div id="addModal">
+    <div id="addModalContent">
+      <h3>Add New Product</h3>
+      <input type="text" id="newProductCode" placeholder="Product Code" />
+      <input type="text" id="newProductName" placeholder="Product Name" />
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button onclick="addNewProduct()">Save</button>
+        <button onclick="closeAddModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+<script>
+  let stock = JSON.parse(localStorage.getItem("stock") || "{}");
+  let newItems = [];
+  const theme = localStorage.getItem("theme") || "dark";
+  document.body.classList.toggle("light", theme === "light");
+
+  function toggleTheme() {
+    const isLight = document.body.classList.toggle("light");
+    localStorage.setItem("theme", isLight ? "light" : "dark");
+  }
+
+  function saveStock() {
+    localStorage.setItem("stock", JSON.stringify(stock));
+  }
+
+  function openAddModal() {
+    document.getElementById("addModal").style.display = "flex";
+    document.getElementById("newProductCode").value = "";
+    document.getElementById("newProductName").value = "";
+  }
+
+  function closeAddModal() {
+    document.getElementById("addModal").style.display = "none";
+  }
+
+  function addNewProduct() {
+    const code = document.getElementById("newProductCode").value.trim().toUpperCase();
+    const name = document.getElementById("newProductName").value.trim();
+    if (!code || !name) return alert("Both fields are required.");
+    if (stock[code]) return alert("Product code already exists.");
+    stock[code] = { name: name, qty: 0, price: 0 };
+    newItems.push(code);
+    saveStock();
+    renderStock();
+    closeAddModal();
+  }
+
+  function updateQty(code, newQty) {
+    const qty = parseInt(newQty);
+    if (!isNaN(qty) && qty >= 0) {
+      stock[code].qty = qty;
+      saveStock();
+      renderStock();
+    }
+  }
+
+  function updatePrice(code, newPrice) {
+    const price = parseFloat(newPrice);
+    if (!isNaN(price) && price >= 0) {
+      stock[code].price = price;
+      saveStock();
+    }
+  }
+
+  function deleteProduct(code) {
+    if (confirm(`Delete product ${code}?`)) {
+      delete stock[code];
+      saveStock();
+      renderStock();
+    }
+  }
+
+  function duplicateProduct(code) {
+    let newCode = code + "-COPY";
+    while (stock[newCode]) newCode += "1";
+    stock[newCode] = { ...stock[code], name: stock[code].name + " (Copy)" };
+    newItems.push(newCode);
+    saveStock();
+    renderStock();
+  }
+
+  function autoSaveRename(oldCode, field) {
+    const newCode = document.getElementById(`code-${oldCode}`).value.trim().toUpperCase();
+    const newName = document.getElementById(`name-${oldCode}`).value.trim();
+    if (!newCode || !newName) return;
+    if (newCode !== oldCode && stock[newCode]) return alert("Code already exists");
+    const item = stock[oldCode];
+    delete stock[oldCode];
+    stock[newCode] = { ...item, name: newName };
+    const idx = newItems.indexOf(oldCode);
+    if (idx !== -1) newItems[idx] = newCode;
+    saveStock();
+    renderStock();
+  }
+
+  function exportToExcel() {
+    const data = [["Product Code", "Product Name", "Quantity", "Price"]];
+    for (const code in stock) {
+      data.push([code, stock[code].name, stock[code].qty, stock[code].price || 0]);
+    }
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Stock");
+    XLSX.writeFile(workbook, "stock_data.xlsx");
+  }
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  window.onscroll = function () {
+    document.getElementById("scrollTopBtn").style.display = window.scrollY > 200 ? "flex" : "none";
+  };
+
+  function renderStock() {
+    const list = document.getElementById("stockList");
+    const searchTerm = document.getElementById("searchInput").value.trim().toLowerCase();
+    const qtyFilter = document.getElementById("qtyFilter").value;
+    const sortOption = document.getElementById("sortFilter").value;
+
+    let items = [];
+    for (const code in stock) {
+      const item = stock[code];
+      if (
+        code.toLowerCase().includes(searchTerm) ||
+        item.name.toLowerCase().includes(searchTerm)
+      ) {
+        if (qtyFilter === "available" && item.qty <= 0) continue;
+        if (qtyFilter === "outofstock" && item.qty > 0) continue;
+        if (qtyFilter === "new" && !newItems.includes(code)) continue;
+        items.push({ code, ...item });
+      }
+    }
+
+    items.sort((a, b) => {
+      switch (sortOption) {
+        case "code-asc": return a.code.localeCompare(b.code);
+        case "code-desc": return b.code.localeCompare(a.code);
+        case "name-asc": return a.name.localeCompare(b.name);
+        case "name-desc": return b.name.localeCompare(a.name);
+        case "qty-asc": return a.qty - b.qty;
+        case "qty-desc": return b.qty - a.qty;
+        case "price-asc": return (a.price || 0) - (b.price || 0);
+        case "price-desc": return (b.price || 0) - (a.price || 0);
+      }
+    });
+
+    list.innerHTML = "";
+    for (const item of items) {
+      const qtyColor = item.qty === 0 ? "red" : item.qty <= 10 ? "orange" : "green";
+      list.innerHTML += `
+        <li>
+          <input id="code-${item.code}" class="inline-edit" value="${item.code}" onblur="autoSaveRename('${item.code}', 'code')" />
+          <input id="name-${item.code}" class="inline-edit" value="${item.name}" onblur="autoSaveRename('${item.code}', 'name')" />
+          <div>
+            Qty:
+            <input type="number" value="${item.qty}" min="0" onchange="updateQty('${item.code}', this.value)" style="color: ${qtyColor}; font-weight: bold;" />
+            Price:
+            <input type="number" value="${item.price || 0}" min="0" onchange="updatePrice('${item.code}', this.value)" />
+          </div>
+          <div class="button-group">
+            <button onclick="deleteProduct('${item.code}')">Delete</button>
+            <button onclick="duplicateProduct('${item.code}')">Duplicate</button>
+          </div>
+        </li>`;
+    }
+  }
+
+  renderStock();
+</script>
+</body>
+</html>
